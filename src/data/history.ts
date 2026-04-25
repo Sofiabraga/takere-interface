@@ -50,8 +50,8 @@ export function getAdherence(day: DayHistory): number {
   return day.medications.length > 0 ? taken / day.medications.length : 0;
 }
 
-export function getWeekAdherence(): number {
-  const all = weekHistory.flatMap((d) => d.medications);
+export function getWeekAdherence(days: DayHistory[] = weekHistory): number {
+  const all = days.flatMap((d) => d.medications);
   const taken = all.filter((m) => m.status === 'taken').length;
   return all.length > 0 ? taken / all.length : 0;
 }

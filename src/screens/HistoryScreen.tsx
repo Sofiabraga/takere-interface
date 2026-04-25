@@ -1,15 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   StatusBar,
+  ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { WeekCalendar } from '../components/WeekCalendar';
-import { weekHistory, getAdherence, getWeekAdherence, HistoryMedication } from '../data/history';
+import { getAdherence, getWeekAdherence, HistoryMedication, DayHistory } from '../data/history';
 import { colors, spacing, typography, radius } from '../theme';
+import { api } from '../services/api';
+
+interface ApiDayHistory {
+  date: string;
+  medications: HistoryMedication[];
+}
 
 const STATUS_LABEL: Record<string, string> = {
   taken: 'Tomado',
@@ -30,11 +39,63 @@ const STATUS_BG: Record<string, string> = {
 };
 
 export function HistoryScreen() {
-  const [selectedIndex, setSelectedIndex] = useState(weekHistory.length - 1);
-  const selectedDay = weekHistory[selectedIndex];
-  const weekRate = getWeekAdherence();
+  const [history, setHistory] = useState<DayHistory[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchHistory();
+    }, [])
+  );
+
+  async function fetchHistory() {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await api.get<ApiDayHistory[]>('/history');
+      const converted: DayHistory[] = data.map((d) => ({
+        // Force local timezone parse — 'YYYY-MM-DD' alone is parsed as UTC midnight
+        date: new Date(d.date + 'T00:00:00'),
+        medications: d.medications,
+      }));
+      setHistory(converted);
+      setSelectedIndex(converted.length - 1);
+    } catch {
+      setError('Não foi possível carregar o histórico');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || history.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error ?? 'Sem dados disponíveis'}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={fetchHistory}>
+            <Text style={styles.retryText}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const selectedDay = history[selectedIndex];
+  const weekRate = getWeekAdherence(history);
   const dayRate = getAdherence(selectedDay);
-  const isToday = selectedIndex === weekHistory.length - 1;
+  const isToday = selectedIndex === history.length - 1;
 
   const formattedDate = selectedDay.date.toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -77,7 +138,7 @@ export function HistoryScreen() {
         {/* Week calendar */}
         <Text style={styles.sectionLabel}>Selecione o dia</Text>
         <WeekCalendar
-          days={weekHistory}
+          days={history}
           selectedIndex={selectedIndex}
           onSelectDay={setSelectedIndex}
         />
@@ -176,6 +237,34 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.xl * 2,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.xl,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  retryText: {
+    ...typography.body,
+    color: colors.white,
+    fontWeight: '600',
   },
   header: {
     marginBottom: spacing.lg,

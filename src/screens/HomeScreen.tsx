@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { mockMedications, Medication, MedicationStatus } from '../data/medications';
+import { Medication, MedicationStatus } from '../data/medications';
 import { MedicationCard } from '../components/MedicationCard';
 import { DaySummary } from '../components/DaySummary';
 import { SectionHeader } from '../components/SectionHeader';
 import { UndoSnackbar } from '../components/UndoSnackbar';
 import { colors, spacing, typography, radius } from '../theme';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const FILTERS: { label: string; value: MedicationStatus | 'all' }[] = [
   { label: 'Todos', value: 'all' },
@@ -63,7 +66,10 @@ function getMinutesUntil(time: string): string {
 }
 
 export function HomeScreen() {
-  const [medications, setMedications] = useState<Medication[]>(mockMedications);
+  const { user, logout } = useAuth();
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<MedicationStatus | 'all'>('all');
   const [snackbar, setSnackbar] = useState<{ visible: boolean; id: string; name: string }>({
     visible: false,
@@ -71,25 +77,52 @@ export function HomeScreen() {
     name: '',
   });
 
+  useEffect(() => {
+    fetchMedications();
+  }, []);
+
+  async function fetchMedications() {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await api.get<Medication[]>('/medications');
+      setMedications(data);
+    } catch {
+      setError('Não foi possível carregar os medicamentos');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   const taken = medications.filter((m) => m.status === 'taken').length;
   const late = medications.filter((m) => m.status === 'late').length;
   const pending = medications.filter((m) => m.status === 'pending').length;
 
-  function handleMarkTaken(id: string) {
+  async function handleMarkTaken(id: string) {
     const med = medications.find((m) => m.id === id);
     if (!med) return;
     const now = new Date();
     const takenAt = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     setMedications((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, status: 'taken', takenAt } : m))
+      prev.map((m) => (m.id === id ? { ...m, status: 'taken' as MedicationStatus, takenAt } : m))
     );
     setSnackbar({ visible: true, id, name: med.name });
+    try {
+      await api.patch(`/medications/${id}/status`, { status: 'taken' });
+    } catch {
+      // silent — optimistic update stays; could revert if needed
+    }
   }
 
-  function handleUndo() {
+  async function handleUndo() {
     setMedications((prev) =>
-      prev.map((m) => (m.id === snackbar.id ? { ...m, status: 'pending', takenAt: undefined } : m))
+      prev.map((m) => (m.id === snackbar.id ? { ...m, status: 'pending' as MedicationStatus, takenAt: undefined } : m))
     );
+    try {
+      await api.patch(`/medications/${snackbar.id}/status`, { status: 'pending' });
+    } catch {
+      // silent
+    }
   }
 
   const filtered =
@@ -117,108 +150,128 @@ export function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Olá, Paciente 👋</Text>
+            <Text style={styles.greeting}>Olá, {user?.name ?? 'Paciente'} 👋</Text>
             <Text style={styles.date}>{today}</Text>
           </View>
-          <TouchableOpacity style={styles.notificationBtn} activeOpacity={0.8}>
-            <Ionicons name="notifications-outline" size={22} color={colors.primary} />
-            {late > 0 && <View style={styles.notificationDot} />}
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.iconBtn} activeOpacity={0.8}>
+              <Ionicons name="notifications-outline" size={22} color={colors.primary} />
+              {late > 0 && <View style={styles.notificationDot} />}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconBtn} onPress={logout} activeOpacity={0.8}>
+              <Ionicons name="log-out-outline" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Summary */}
-        <DaySummary
-          total={medications.length}
-          taken={taken}
-          late={late}
-          pending={pending}
-        />
-
-        {/* Next medication banner */}
-        {nextMed && (
-          <View style={[styles.nextBanner, nextMed.status === 'late' && styles.nextBannerLate]}>
-            <View style={styles.nextBannerLeft}>
-              <Text style={[styles.nextBannerLabel, nextMed.status === 'late' && styles.nextBannerLabelLate]}>
-                Próximo medicamento
-              </Text>
-              <Text style={styles.nextBannerName}>{nextMed.icon} {nextMed.name}</Text>
-              {nextMed.fasting && (
-                <Text style={styles.nextBannerFasting}>☕ Lembre-se: em jejum</Text>
-              )}
-              {nextMed.withFood && (
-                <Text style={styles.nextBannerFood}>🍽️ Tomar com comida</Text>
-              )}
-            </View>
-            <View style={[styles.nextBannerTime, nextMed.status === 'late' && styles.nextBannerTimeLate]}>
-              <Text style={styles.nextBannerTimeText}>{getMinutesUntil(nextMed.time)}</Text>
-            </View>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
-        )}
-
-        {/* All done banner */}
-        {taken === medications.length && (
-          <View style={styles.allDoneBanner}>
-            <Text style={styles.allDoneText}>🎉 Todos os medicamentos tomados hoje!</Text>
-          </View>
-        )}
-
-        {/* Filters */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterContent}
-        >
-          {FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f.value}
-              style={[styles.filterChip, activeFilter === f.value && styles.filterChipActive]}
-              onPress={() => setActiveFilter(f.value)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.filterText, activeFilter === f.value && styles.filterTextActive]}>
-                {f.label}
-              </Text>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={fetchMedications}>
+              <Text style={styles.retryText}>Tentar novamente</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Medication list */}
-        {activeFilter === 'all' ? (
-          PERIODS.map((period) => {
-            const periodMeds = filtered.filter((m) => {
-              const h = getHour(m.time);
-              return h >= period.start && h <= period.end;
-            });
-            if (!periodMeds.length) return null;
-            const periodTaken = periodMeds.filter((m) => m.status === 'taken').length;
-            return (
-              <View key={period.key}>
-                <SectionHeader
-                  icon={period.icon}
-                  label={period.label}
-                  count={periodMeds.length}
-                  takenCount={periodTaken}
-                />
-                {periodMeds.map((med) => (
-                  <MedicationCard key={med.id} medication={med} onMarkTaken={handleMarkTaken} />
-                ))}
-              </View>
-            );
-          })
-        ) : (
-          <View>
-            {filtered.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>🎉</Text>
-                <Text style={styles.emptyText}>Nenhum medicamento nesta categoria</Text>
-              </View>
-            ) : (
-              filtered.map((med) => (
-                <MedicationCard key={med.id} medication={med} onMarkTaken={handleMarkTaken} />
-              ))
-            )}
           </View>
+        ) : (
+          <>
+            {/* Summary */}
+            <DaySummary
+              total={medications.length}
+              taken={taken}
+              late={late}
+              pending={pending}
+            />
+
+            {/* Next medication banner */}
+            {nextMed && (
+              <View style={[styles.nextBanner, nextMed.status === 'late' && styles.nextBannerLate]}>
+                <View style={styles.nextBannerLeft}>
+                  <Text style={[styles.nextBannerLabel, nextMed.status === 'late' && styles.nextBannerLabelLate]}>
+                    Próximo medicamento
+                  </Text>
+                  <Text style={styles.nextBannerName}>{nextMed.icon} {nextMed.name}</Text>
+                  {nextMed.fasting && (
+                    <Text style={styles.nextBannerFasting}>☕ Lembre-se: em jejum</Text>
+                  )}
+                  {nextMed.withFood && (
+                    <Text style={styles.nextBannerFood}>🍽️ Tomar com comida</Text>
+                  )}
+                </View>
+                <View style={[styles.nextBannerTime, nextMed.status === 'late' && styles.nextBannerTimeLate]}>
+                  <Text style={styles.nextBannerTimeText}>{getMinutesUntil(nextMed.time)}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* All done banner */}
+            {medications.length > 0 && taken === medications.length && (
+              <View style={styles.allDoneBanner}>
+                <Text style={styles.allDoneText}>🎉 Todos os medicamentos tomados hoje!</Text>
+              </View>
+            )}
+
+            {/* Filters */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterScroll}
+              contentContainerStyle={styles.filterContent}
+            >
+              {FILTERS.map((f) => (
+                <TouchableOpacity
+                  key={f.value}
+                  style={[styles.filterChip, activeFilter === f.value && styles.filterChipActive]}
+                  onPress={() => setActiveFilter(f.value)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.filterText, activeFilter === f.value && styles.filterTextActive]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Medication list */}
+            {activeFilter === 'all' ? (
+              PERIODS.map((period) => {
+                const periodMeds = filtered.filter((m) => {
+                  const h = getHour(m.time);
+                  return h >= period.start && h <= period.end;
+                });
+                if (!periodMeds.length) return null;
+                const periodTaken = periodMeds.filter((m) => m.status === 'taken').length;
+                return (
+                  <View key={period.key}>
+                    <SectionHeader
+                      icon={period.icon}
+                      label={period.label}
+                      count={periodMeds.length}
+                      takenCount={periodTaken}
+                    />
+                    {periodMeds.map((med) => (
+                      <MedicationCard key={med.id} medication={med} onMarkTaken={handleMarkTaken} />
+                    ))}
+                  </View>
+                );
+              })
+            ) : (
+              <View>
+                {filtered.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyIcon}>🎉</Text>
+                    <Text style={styles.emptyText}>Nenhum medicamento nesta categoria</Text>
+                  </View>
+                ) : (
+                  filtered.map((med) => (
+                    <MedicationCard key={med.id} medication={med} onMarkTaken={handleMarkTaken} />
+                  ))
+                )}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -256,7 +309,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     textTransform: 'capitalize',
   },
-  notificationBtn: {
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  iconBtn: {
     width: 44,
     height: 44,
     backgroundColor: colors.primaryLight,
@@ -274,6 +331,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.late,
     borderWidth: 1.5,
     borderColor: colors.background,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xl * 2,
+    alignItems: 'center',
+  },
+  errorContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  retryText: {
+    ...typography.body,
+    color: colors.white,
+    fontWeight: '600',
   },
   nextBanner: {
     flexDirection: 'row',

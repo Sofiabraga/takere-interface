@@ -1,90 +1,75 @@
 # Takere — Interface Mobile de Lembretes de Medicamentos
 
-Interface mobile para acompanhamento de medicamentos do paciente, construída com **React Native + Expo**.
+App mobile para acompanhamento de medicamentos do paciente, construído com **React Native + Expo + TypeScript**.
+
+Requer o backend [`takere-api`](../takere-api) em execução para funcionar.
 
 ---
 
 ## Pré-requisitos
 
-Antes de começar, você precisa ter instalado:
-
 - [Node.js](https://nodejs.org/) v18 ou superior
-- [npm](https://www.npmjs.com/) ou [yarn](https://yarnpkg.com/)
-
-Para testar no celular físico, instale o app **Expo Go** no seu dispositivo:
-- [iOS — App Store](https://apps.apple.com/app/expo-go/id982107779)
-- [Android — Google Play](https://play.google.com/store/apps/details?id=host.exp.exponent)
+- Backend `takere-api` rodando (veja instruções abaixo)
+- Para testar no iOS Simulator: Xcode instalado
+- Para testar no celular físico: app [Expo Go](https://expo.dev/go)
 
 ---
 
-## Instalação
+## Configuração rápida
+
+### 1. Suba o backend primeiro
 
 ```bash
-# Navegue até a pasta do projeto
-cd takere-interface
-
-# Instale as dependências
+cd ../takere-api
 npm install
+npm run dev
+# Servidor em http://localhost:3000
 ```
 
----
+### 2. Configure a URL da API
 
-## Como rodar
+Abra `src/services/api.ts` e ajuste `API_BASE_URL`:
 
-### No celular físico (recomendado para testar a UI)
+| Ambiente | URL |
+|---|---|
+| iOS Simulator | `http://<IP-LAN-do-seu-Mac>:3000` |
+| Android Emulator | `http://10.0.2.2:3000` |
+| Celular físico | `http://<IP-LAN-do-seu-Mac>:3000` |
+
+> **Por que não `localhost`?** No simulador/emulador, `localhost` aponta para o próprio dispositivo virtual, não para o seu Mac. Use o IP da sua rede local (ex: `192.168.x.x`).
+>
+> Para descobrir seu IP: `ipconfig getifaddr en0` (macOS)
+
+### 3. Suba o app
 
 ```bash
+cd takere-interface
+npm install
 npx expo start
 ```
 
-1. Abra o app **Expo Go** no celular
-2. Escaneie o QR Code que aparecer no terminal
-3. O app carregará automaticamente
+---
 
-### No emulador Android
+## Contas de teste
 
-```bash
-npx expo start --android
-```
+As contas abaixo são criadas automaticamente pelo backend na primeira inicialização:
 
-> Requer Android Studio com um emulador configurado.
-
-### No simulador iOS (apenas macOS)
-
-```bash
-npx expo start --ios
-```
-
-> Requer Xcode instalado.
-
-### No navegador (limitado — não recomendado para UI nativa)
-
-```bash
-npx expo start --web
-```
+| Nome | Email | Senha | Perfil |
+|---|---|---|---|
+| Paciente Teste | `test@test.com` | `test123` | 7 medicamentos, condições crônicas, aderência mista (~72%) |
+| Carlos Mendes | `carlos@test.com` | `carlos123` | 5 medicamentos, recuperação pós-cirúrgica, alta aderência (~97%) |
+| Ana Lima | `ana@test.com` | `ana123` | 5 medicamentos, suplementos + hormonal, baixa aderência (~45%) |
 
 ---
 
-## Como testar a tela
+## Funcionalidades
 
-A tela principal (`HomeScreen`) já contém **dados mock** em `src/data/medications.ts`. Você pode testar:
-
-| O que testar | Como |
-|---|---|
-| Cards verdes | Medicamentos com `status: 'taken'` — aparecem com fundo verde |
-| Cards vermelhos | Medicamentos com `status: 'late'` — aparecem com fundo vermelho |
-| Cards amarelos | Medicamentos com `status: 'pending'` — borda cinza, badge amarelo |
-| Filtros | Toque nas chips "Tomados", "Atrasados", "Pendentes" para filtrar a lista |
-| Barra de progresso | Mostra quantos medicamentos foram tomados no dia |
-| Notificação | O ícone de sino fica com ponto vermelho quando há atrasados |
-
-Para **adicionar ou modificar medicamentos mock**, edite o arquivo:
-
-```
-src/data/medications.ts
-```
-
-Altere o campo `status` de qualquer medicamento para `'taken'`, `'late'` ou `'pending'` e o app vai atualizar em tempo real (hot reload).
+- **Login** com persistência de sessão (token salvo no dispositivo)
+- **Tela "Hoje"** — lista de medicamentos do dia agrupados por período (manhã/tarde/noite)
+- **Marcar como tomado** com atualização otimista e desfazer por 3,5 segundos
+- **Filtros** por status (Todos / Tomados / Atrasados / Pendentes)
+- **Tela "Histórico"** — aderência dos últimos 7 dias com calendário semanal interativo
+- **Logout** pelo botão no cabeçalho da tela principal
 
 ---
 
@@ -92,53 +77,67 @@ Altere o campo `status` de qualquer medicamento para `'taken'`, `'late'` ou `'pe
 
 ```
 takere-interface/
-├── App.tsx                      # Ponto de entrada + navegação
+├── App.tsx                         # Ponto de entrada + navegação + guard de auth
 ├── src/
 │   ├── screens/
-│   │   └── HomeScreen.tsx       # Tela principal
+│   │   ├── HomeScreen.tsx          # Tela principal (medicamentos de hoje)
+│   │   ├── HistoryScreen.tsx       # Histórico semanal de aderência
+│   │   └── LoginScreen.tsx         # Tela de login
 │   ├── components/
-│   │   ├── MedicationCard.tsx   # Card de cada medicamento
-│   │   └── DaySummary.tsx       # Resumo do dia (stats + barra)
+│   │   ├── MedicationCard.tsx      # Card expansível de medicamento
+│   │   ├── DaySummary.tsx          # Resumo do dia (stats + barra de progresso)
+│   │   ├── WeekCalendar.tsx        # Calendário semanal com barras de aderência
+│   │   ├── SectionHeader.tsx       # Cabeçalho de período (Manhã/Tarde/Noite)
+│   │   └── UndoSnackbar.tsx        # Snackbar com ação de desfazer
+│   ├── context/
+│   │   └── AuthContext.tsx         # Estado de autenticação (token, user, login, logout)
+│   ├── services/
+│   │   └── api.ts                  # Cliente HTTP centralizado (fetch + JWT)
 │   ├── data/
-│   │   └── medications.ts       # Dados mock + tipos TypeScript
+│   │   ├── medications.ts          # Tipos TypeScript (Medication, MedicationStatus)
+│   │   └── history.ts              # Tipos + funções de cálculo de aderência
 │   └── theme/
-│       └── index.ts             # Cores, espaçamentos, tipografia
-├── assets/                      # Ícones e splash screen
-├── app.json                     # Configuração do Expo
-└── tsconfig.json                # Configuração TypeScript
+│       └── index.ts                # Cores, espaçamentos, tipografia
+├── assets/
+├── app.json                        # Configuração Expo
+└── tsconfig.json
 ```
-
----
-
-## Cronograma de desenvolvimento
-
-### Fase 1 — Interface base ✅ (concluído)
-- [x] Setup Expo + TypeScript
-- [x] Tema de cores e design tokens
-- [x] Dados mock com tipos TypeScript
-- [x] Tela principal com lista de medicamentos
-- [x] Card de medicamento (verde / vermelho / pendente)
-- [x] Resumo do dia com barra de progresso
-- [x] Filtros por status
-
-### Fase 2 — Melhorias de UX
-- [ ] Animação ao marcar medicamento como tomado
-- [ ] Tela de detalhes do medicamento
-- [ ] Seções por período do dia (manhã / tarde / noite)
-- [ ] Pull-to-refresh
-- [ ] Modo escuro
-
-### Fase 3 — Funcionalidades adicionais
-- [ ] Notificações locais com `expo-notifications`
-- [ ] Histórico de aderência por semana/mês
-- [ ] Tela de configuração de novos medicamentos
-- [ ] Integração com backend (API REST)
 
 ---
 
 ## Tecnologias
 
-- [Expo](https://expo.dev/) — framework React Native
-- [React Navigation](https://reactnavigation.org/) — navegação entre telas
-- [Expo Vector Icons](https://icons.expo.fyi/) — biblioteca de ícones
+- [Expo](https://expo.dev/) v54 — framework React Native
+- [React Navigation](https://reactnavigation.org/) — navegação (bottom tabs + native stack)
+- [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) — persistência do token JWT
+- [Expo Vector Icons](https://icons.expo.fyi/) — ícones Ionicons
 - [TypeScript](https://www.typescriptlang.org/) — tipagem estática
+
+---
+
+## Cronograma de desenvolvimento
+
+### Fase 1 — Interface base ✅
+- [x] Setup Expo + TypeScript
+- [x] Tema de cores e design tokens
+- [x] Tela principal com lista de medicamentos
+- [x] Cards por status (tomado / atrasado / pendente)
+- [x] Resumo do dia com barra de progresso
+- [x] Filtros por status
+- [x] Seções por período do dia (manhã / tarde / noite)
+- [x] Tela de histórico semanal
+
+### Fase 2 — Backend e autenticação ✅
+- [x] Backend TypeScript com Express + SQLite
+- [x] Autenticação JWT (login / registro)
+- [x] Tela de login
+- [x] Persistência de sessão com AsyncStorage
+- [x] Integração da tela principal com a API
+- [x] Integração do histórico com a API
+- [x] Logout
+
+### Fase 3 — Funcionalidades adicionais
+- [ ] Notificações locais com `expo-notifications`
+- [ ] Tela de cadastro de novos medicamentos
+- [ ] Pull-to-refresh nas telas
+- [ ] Modo escuro
