@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,18 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Medication, MedicationStatus } from '../data/medications';
 import { MedicationCard } from '../components/MedicationCard';
 import { DaySummary } from '../components/DaySummary';
 import { SectionHeader } from '../components/SectionHeader';
 import { UndoSnackbar } from '../components/UndoSnackbar';
-import { colors, spacing, typography, radius } from '../theme';
+import { spacing, typography, radius } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -67,8 +70,10 @@ function getMinutesUntil(time: string): string {
 
 export function HomeScreen() {
   const { user, logout } = useAuth();
+  const { colors, isDark, toggleTheme } = useTheme();
   const [medications, setMedications] = useState<Medication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<MedicationStatus | 'all'>('all');
   const [snackbar, setSnackbar] = useState<{ visible: boolean; id: string; name: string }>({
@@ -77,9 +82,11 @@ export function HomeScreen() {
     name: '',
   });
 
-  useEffect(() => {
-    fetchMedications();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchMedications();
+    }, [])
+  );
 
   async function fetchMedications() {
     try {
@@ -91,6 +98,18 @@ export function HomeScreen() {
       setError('Não foi possível carregar os medicamentos');
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function refreshMedications() {
+    try {
+      setIsRefreshing(true);
+      const data = await api.get<Medication[]>('/medications');
+      setMedications(data);
+    } catch {
+      // silent on refresh failure
+    } finally {
+      setIsRefreshing(false);
     }
   }
 
@@ -110,7 +129,7 @@ export function HomeScreen() {
     try {
       await api.patch(`/medications/${id}/status`, { status: 'taken' });
     } catch {
-      // silent — optimistic update stays; could revert if needed
+      // silent — optimistic update stays
     }
   }
 
@@ -138,14 +157,23 @@ export function HomeScreen() {
     month: 'long',
   });
 
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refreshMedications}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
@@ -154,6 +182,9 @@ export function HomeScreen() {
             <Text style={styles.date}>{today}</Text>
           </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.iconBtn} onPress={toggleTheme} activeOpacity={0.8}>
+              <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={22} color={colors.primary} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iconBtn} activeOpacity={0.8}>
               <Ionicons name="notifications-outline" size={22} color={colors.primary} />
               {late > 0 && <View style={styles.notificationDot} />}
@@ -285,188 +316,192 @@ export function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xl * 2,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.lg,
-  },
-  greeting: {
-    ...typography.title,
-    marginBottom: 2,
-  },
-  date: {
-    ...typography.caption,
-    textTransform: 'capitalize',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.late,
-    borderWidth: 1.5,
-    borderColor: colors.background,
-  },
-  loadingContainer: {
-    paddingVertical: spacing.xl * 2,
-    alignItems: 'center',
-  },
-  errorContainer: {
-    paddingVertical: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-  },
-  retryText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  nextBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.primary + '33',
-  },
-  nextBannerLate: {
-    backgroundColor: colors.lateLight,
-    borderColor: colors.late + '33',
-  },
-  nextBannerLeft: { flex: 1 },
-  nextBannerLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  nextBannerLabelLate: {
-    color: colors.late,
-  },
-  nextBannerName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  nextBannerFasting: {
-    fontSize: 11,
-    color: colors.pending,
-    fontWeight: '500',
-  },
-  nextBannerFood: {
-    fontSize: 11,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  nextBannerTime: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-    marginLeft: spacing.sm,
-  },
-  nextBannerTimeLate: {
-    backgroundColor: colors.late,
-  },
-  nextBannerTimeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  allDoneBanner: {
-    backgroundColor: colors.takenLight,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.taken + '44',
-  },
-  allDoneText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.taken,
-  },
-  filterScroll: {
-    marginBottom: spacing.md,
-    marginHorizontal: -spacing.lg,
-  },
-  filterContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  filterTextActive: {
-    color: colors.white,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: spacing.sm,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-});
+function makeStyles(colors: ReturnType<typeof import('../context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scroll: { flex: 1 },
+    scrollContent: {
+      padding: spacing.lg,
+      paddingBottom: spacing.xl * 2 + 80,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: spacing.lg,
+    },
+    greeting: {
+      ...typography.title,
+      color: colors.text,
+      marginBottom: 2,
+    },
+    date: {
+      ...typography.caption,
+      color: colors.textSecondary,
+      textTransform: 'capitalize',
+    },
+    headerActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    iconBtn: {
+      width: 44,
+      height: 44,
+      backgroundColor: colors.primaryLight,
+      borderRadius: radius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    notificationDot: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.late,
+      borderWidth: 1.5,
+      borderColor: colors.background,
+    },
+    loadingContainer: {
+      paddingVertical: spacing.xl * 2,
+      alignItems: 'center',
+    },
+    errorContainer: {
+      paddingVertical: spacing.xl,
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    errorText: {
+      ...typography.body,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    retryBtn: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+    },
+    retryText: {
+      ...typography.body,
+      color: colors.white,
+      fontWeight: '600',
+    },
+    nextBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.primaryLight,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.primary + '33',
+    },
+    nextBannerLate: {
+      backgroundColor: colors.lateLight,
+      borderColor: colors.late + '33',
+    },
+    nextBannerLeft: { flex: 1 },
+    nextBannerLabel: {
+      fontSize: 11,
+      fontWeight: '500',
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: 2,
+    },
+    nextBannerLabelLate: {
+      color: colors.late,
+    },
+    nextBannerName: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    nextBannerFasting: {
+      fontSize: 11,
+      color: colors.pending,
+      fontWeight: '500',
+    },
+    nextBannerFood: {
+      fontSize: 11,
+      color: colors.primary,
+      fontWeight: '500',
+    },
+    nextBannerTime: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: radius.md,
+      marginLeft: spacing.sm,
+    },
+    nextBannerTimeLate: {
+      backgroundColor: colors.late,
+    },
+    nextBannerTimeText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    allDoneBanner: {
+      backgroundColor: colors.takenLight,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.taken + '44',
+    },
+    allDoneText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.taken,
+    },
+    filterScroll: {
+      marginBottom: spacing.md,
+      marginHorizontal: -spacing.lg,
+    },
+    filterContent: {
+      paddingHorizontal: spacing.lg,
+      gap: spacing.sm,
+    },
+    filterChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs + 2,
+      borderRadius: radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+    },
+    filterChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    filterText: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    filterTextActive: {
+      color: colors.white,
+    },
+    emptyState: {
+      alignItems: 'center',
+      paddingVertical: spacing.xl,
+    },
+    emptyIcon: {
+      fontSize: 40,
+      marginBottom: spacing.sm,
+    },
+    emptyText: {
+      ...typography.body,
+      color: colors.textSecondary,
+    },
+  });
+}

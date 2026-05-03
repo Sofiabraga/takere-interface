@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,12 +9,24 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { colors } from './src/theme';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { requestNotificationPermissions } from './src/services/notifications';
+
+export type RootStackParamList = {
+  MainTabs: undefined;
+};
+
+type AuthStackParamList = {
+  Login: undefined;
+};
 
 const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 
 function MainTabs() {
+  const { colors } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -50,6 +62,11 @@ function MainTabs() {
 
 function AppNavigator() {
   const { token, isLoading } = useAuth();
+  const { colors } = useTheme();
+
+  useEffect(() => {
+    if (token) requestNotificationPermissions();
+  }, [token]);
 
   if (isLoading) {
     return (
@@ -62,11 +79,13 @@ function AppNavigator() {
   return (
     <NavigationContainer>
       {token ? (
-        <MainTabs />
-      ) : (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="MainTabs" component={MainTabs} />
         </Stack.Navigator>
+      ) : (
+        <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+          <AuthStack.Screen name="Login" component={LoginScreen} />
+        </AuthStack.Navigator>
       )}
     </NavigationContainer>
   );
@@ -75,9 +94,11 @@ function AppNavigator() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

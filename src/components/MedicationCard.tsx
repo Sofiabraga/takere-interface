@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Medication } from '../data/medications';
-import { colors, radius, spacing, typography } from '../theme';
+import { radius, spacing, typography } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -21,36 +22,39 @@ interface Props {
   onMarkTaken: (id: string) => void;
 }
 
-const statusConfig = {
-  taken: {
-    bg: colors.takenLight,
-    border: colors.taken,
-    badge: colors.taken,
-    badgeText: '#FFFFFF',
-    label: 'Tomado',
-    timeFade: true,
-  },
-  late: {
-    bg: colors.lateLight,
-    border: colors.late,
-    badge: colors.late,
-    badgeText: '#FFFFFF',
-    label: 'Atrasado',
-    timeFade: false,
-  },
-  pending: {
-    bg: colors.surface,
-    border: colors.border,
-    badge: colors.pendingLight,
-    badgeText: colors.pending,
-    label: 'Pendente',
-    timeFade: false,
-  },
-};
-
 export function MedicationCard({ medication, onMarkTaken }: Props) {
+  const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
+
+  const statusConfig = useMemo(() => ({
+    taken: {
+      bg: colors.takenLight,
+      border: colors.taken,
+      badge: colors.taken,
+      badgeText: '#FFFFFF',
+      label: 'Tomado',
+      timeFade: true,
+    },
+    late: {
+      bg: colors.lateLight,
+      border: colors.late,
+      badge: colors.late,
+      badgeText: '#FFFFFF',
+      label: 'Atrasado',
+      timeFade: false,
+    },
+    pending: {
+      bg: colors.surface,
+      border: colors.border,
+      badge: colors.pendingLight,
+      badgeText: colors.pending,
+      label: 'Pendente',
+      timeFade: false,
+    },
+  }), [colors]);
+
   const config = statusConfig[medication.status];
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   function handleToggle() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -158,109 +162,15 @@ export function MedicationCard({ medication, onMarkTaken }: Props) {
 
 function ContextChip({ icon, label, color, bg }: { icon: string; label: string; color: string; bg: string }) {
   return (
-    <View style={[styles.contextChip, { backgroundColor: bg }]}>
-      <Text style={styles.contextChipIcon}>{icon}</Text>
-      <Text style={[styles.contextChipLabel, { color }]}>{label}</Text>
+    <View style={[contextChipStyles.chip, { backgroundColor: bg }]}>
+      <Text style={contextChipStyles.icon}>{icon}</Text>
+      <Text style={[contextChipStyles.label, { color }]}>{label}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    marginBottom: spacing.sm,
-    padding: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  timeColumn: {
-    alignItems: 'center',
-    marginRight: spacing.md,
-    minWidth: 44,
-    paddingTop: 2,
-  },
-  time: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  timeFaded: {
-    color: colors.textSecondary,
-  },
-  dot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: 3,
-  },
-  icon: {
-    fontSize: 16,
-  },
-  name: {
-    ...typography.subtitle,
-    flex: 1,
-    fontSize: 15,
-  },
-  nameStrike: {
-    textDecorationLine: 'line-through',
-    color: colors.textSecondary,
-  },
-  fastingBadge: {
-    backgroundColor: colors.pendingLight,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radius.xl,
-  },
-  fastingText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.pending,
-  },
-  badge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.xl,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  dosage: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-  expandedContent: {
-    marginTop: spacing.sm,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginBottom: spacing.sm,
-  },
-  contextRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  contextChip: {
+const contextChipStyles = StyleSheet.create({
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
@@ -268,44 +178,139 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     gap: 3,
   },
-  contextChipIcon: {
-    fontSize: 12,
-  },
-  contextChipLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  detailText: {
-    ...typography.body,
-    fontSize: 13,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  notesText: {
-    fontSize: 12,
-    color: colors.late,
-    fontWeight: '500',
-    marginBottom: spacing.sm,
-  },
-  takenAtText: {
-    fontSize: 12,
-    color: colors.taken,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  markTakenBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.taken,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    marginTop: spacing.xs,
-    gap: spacing.xs,
-  },
-  markTakenText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  icon: { fontSize: 12 },
+  label: { fontSize: 11, fontWeight: '500' },
 });
+
+function makeStyles(colors: ReturnType<typeof import('../context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      borderRadius: radius.lg,
+      borderWidth: 1.5,
+      marginBottom: spacing.sm,
+      padding: spacing.md,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    timeColumn: {
+      alignItems: 'center',
+      marginRight: spacing.md,
+      minWidth: 44,
+      paddingTop: 2,
+    },
+    time: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: spacing.xs,
+    },
+    timeFaded: {
+      color: colors.textSecondary,
+    },
+    dot: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    content: {
+      flex: 1,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginBottom: 3,
+    },
+    icon: {
+      fontSize: 16,
+    },
+    name: {
+      ...typography.subtitle,
+      color: colors.text,
+      flex: 1,
+      fontSize: 15,
+    },
+    nameStrike: {
+      textDecorationLine: 'line-through',
+      color: colors.textSecondary,
+    },
+    fastingBadge: {
+      backgroundColor: colors.pendingLight,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: radius.xl,
+    },
+    fastingText: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: colors.pending,
+    },
+    badge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radius.xl,
+    },
+    badgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    dosage: {
+      ...typography.body,
+      color: colors.textSecondary,
+      fontSize: 13,
+    },
+    expandedContent: {
+      marginTop: spacing.sm,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginBottom: spacing.sm,
+    },
+    contextRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    detailText: {
+      ...typography.body,
+      color: colors.text,
+      fontSize: 13,
+      marginBottom: 4,
+    },
+    notesText: {
+      fontSize: 12,
+      color: colors.late,
+      fontWeight: '500',
+      marginBottom: spacing.sm,
+    },
+    takenAtText: {
+      fontSize: 12,
+      color: colors.taken,
+      fontWeight: '600',
+      marginBottom: spacing.xs,
+    },
+    markTakenBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.taken,
+      borderRadius: radius.md,
+      paddingVertical: spacing.sm,
+      marginTop: spacing.xs,
+      gap: spacing.xs,
+    },
+    markTakenText: {
+      color: '#fff',
+      fontWeight: '700',
+      fontSize: 14,
+    },
+  });
+}

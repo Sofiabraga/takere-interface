@@ -36,6 +36,11 @@ yarn-error.*
 # TypeScript
 *.tsbuildinfo
 
+# API database files
+api/*.db
+api/*.db-shm
+api/*.db-wal
+
 # IDE
 .vscode/
 .idea/

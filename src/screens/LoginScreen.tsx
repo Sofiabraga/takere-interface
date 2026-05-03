@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, spacing, radius, typography } from '../theme';
+import { spacing, radius, typography } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -38,6 +40,8 @@ export default function LoginScreen() {
       setIsLoading(false);
     }
   }
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -96,64 +100,67 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  logo: {
-    fontSize: 56,
-    marginBottom: spacing.sm,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 32,
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  form: {
-    gap: spacing.md,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    ...typography.body,
-    color: colors.text,
-  },
-  error: {
-    ...typography.caption,
-    color: colors.late,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    ...typography.subtitle,
-    color: colors.white,
-  },
-});
+function makeStyles(colors: ReturnType<typeof import('../context/ThemeContext').useTheme>['colors']) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.xl,
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: spacing.xl,
+    },
+    logo: {
+      fontSize: 56,
+      marginBottom: spacing.sm,
+    },
+    title: {
+      ...typography.title,
+      color: colors.text,
+      fontSize: 32,
+      marginBottom: spacing.xs,
+    },
+    subtitle: {
+      ...typography.body,
+      color: colors.textSecondary,
+    },
+    form: {
+      gap: spacing.md,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      ...typography.body,
+      color: colors.text,
+    },
+    error: {
+      ...typography.caption,
+      color: colors.late,
+      textAlign: 'center',
+    },
+    button: {
+      backgroundColor: colors.primary,
+      borderRadius: radius.md,
+      paddingVertical: spacing.md,
+      alignItems: 'center',
+      marginTop: spacing.sm,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    buttonText: {
+      ...typography.subtitle,
+      color: colors.white,
+    },
+  });
+}

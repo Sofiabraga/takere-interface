@@ -1,5 +1,5 @@
 // iOS Simulator requires the Mac's LAN IP, not localhost
-const API_BASE_URL = 'http://192.168.15.2:3000';
+const API_BASE_URL = 'http://192.168.0.154:3000';
 
 let authToken: string | null = null;
 
@@ -15,10 +15,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: { ...headers, ...(options.headers as Record<string, string> | undefined) },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: { ...headers, ...(options.headers as Record<string, string> | undefined) },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const data = await response.json();
 
