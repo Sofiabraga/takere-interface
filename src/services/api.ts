@@ -1,5 +1,5 @@
 // iOS Simulator requires the Mac's LAN IP, not localhost
-const API_BASE_URL = 'http://192.168.0.154:3000';
+const API_BASE_URL = 'http://192.168.15.10:3000';
 
 let authToken: string | null = null;
 
